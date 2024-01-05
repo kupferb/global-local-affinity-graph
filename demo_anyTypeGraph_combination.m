@@ -36,18 +36,59 @@ alpha = 20;
 rho=1;
 L=3; % the parameter for control the sparsity during solving the l0 problem  
 %%%%%%%%%%%%%%%%%         read image     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-bsdsRoot='/Users/xiaofangwang/Desktop/global-local-graph-for-image-segmentation-/BSD';
-load_file='/Users/xiaofangwang/Desktop/global-local-graph-for-image-segmentation-/bsd_300_feat';
+if strcmp(getenv('computername'),'BENNYK')
+    bsdsRoot = 'C:\Users\Benny\MATLAB\Projects\AF-graph\BSD';
+else
+    bsdsRoot = 'D:\MATLAB\github\AF-graph\BSD';
+end
+% bsdsRoot='/Users/xiaofangwang/Desktop/global-local-graph-for-image-segmentation-/BSD';
+load_file='bsd_300_feat';
 %load_file_seg_edges='C:\Users\xiaofang\commondata\BSDS300\BSD300_feature_set';
+
+
 fid = fopen(fullfile('Nsegs.txt'),'r');
 Nimgs = 300; % number of images in BSDS300
 [BSDS_INFO] = fscanf(fid,'%d %d \n',[2,Nimgs]);
 fclose(fid);
+run_type = "test";
+if run_type == "test"
+    Nimgs = 100;
+    test_ims_map = "ims_map_test.txt";
+    fid = fopen(test_ims_map);
+    test_ims_map_data = cell2mat(textscan(fid,'%f %*s'));
+    fclose(fid);
+    %%
+    BSDS_INFO = BSDS_INFO(:,ismember(BSDS_INFO(1,:),test_ims_map_data));
+
+elseif run_type == "train"
+    Nimgs = 200;
+    train_ims_map = "ims_map_train.txt";
+    fid = fopen(train_ims_map);
+    test_ims_map_data = cell2mat(textscan(fid,'%f %*s'));
+    fclose(fid);
+    %%
+    BSDS_INFO = BSDS_INFO(:,ismember(BSDS_INFO(1,:),test_ims_map_data));
+
+else
+    Nimgs = 300;
+end
+
+Nimgs_inds = 1:Nimgs;
+Nimgs = length(Nimgs_inds);
+para.Nimgs = Nimgs;
+PRI_all = zeros(Nimgs,1);
+VoI_all = zeros(Nimgs,1);
+GCE_all = zeros(Nimgs,1);
+BDE_all = zeros(Nimgs,1);
+
+
+
 global_graph_mode={'knn+L0','L1+L0','L0+LRR'};
+global_graph_mode={'knn+L0'};%,'L1+L0','L0+LRR'};
 % you could set the number of cluster in the final result
 % to obtain the best performance, in the paper, we  set it to [1:40]
-nclusters=[2 10 30 40];
-for idxI =1:300
+nclusters=[4];%[2 10 30 40];
+for idxI =1:Nimgs
     for m=1:length(global_graph_mode)
         mode=global_graph_mode{m};
         out_path= fullfile('result', mode);
@@ -63,6 +104,12 @@ for idxI =1:300
         img = im2double(imread(img_loc)); [X,Y,~] = size(img);
         load_name=fullfile(load_file,[img_name '.mat']);
         load(load_name)
+        ind_=  4:5;
+        seg = seg(ind_);
+        labels_img = labels_img(ind_);
+        seg_vals = seg_vals(ind_);
+        seg_edges = seg_edges(ind_);
+        feat = feat(ind_); 
         %% construct graph
         Np = X*Y;
         Nsp = 0;
@@ -174,18 +221,27 @@ for idxI =1:300
         [gt_imgs gt_cnt] = view_gt_segmentation(bsdsRoot,img,BSDS_INFO(1,idxI),out_path_gt,img_name,0);
         E=[];
         for ncluster=1:length(nclusters)
+            Nseg = nclusters(ncluster);
             label_img = Tcut(B,nclusters(ncluster),[X,Y]);
             % display the result
-            view_segmentation(img,label_img(:),out_path,img_name,1);
+%             view_segmentation(img,label_img(:),out_path,img_name,1);
             %% Evaluation and save result
             out_vals = eval_segmentation(label_img,gt_imgs);
             E=[E;nclusters(ncluster) out_vals.PRI out_vals.VoI out_vals.GCE out_vals.BDE];
+            fprintf('%6s: %2d %9.6f, %9.6f, %9.6f, %9.6f\n', img_name, Nseg,...
+            out_vals.PRI, out_vals.VoI, out_vals.GCE, out_vals.BDE);
+            PRI_all(idxI) = out_vals.PRI;
+            VoI_all(idxI) = out_vals.VoI;
+            GCE_all(idxI) = out_vals.GCE;
+            BDE_all(idxI) = out_vals.BDE;
+
         end
-        outname = fullfile(out_path,[img_name, '.mat']);
-        fprintf('saving %dth image to %s\n', idxI,outname);
-        save('-v7',outname, 'E');
+%         outname = fullfile(out_path,[img_name, '.mat']);
+%         fprintf('saving %dth image to %s\n', idxI,outname);
+%         save('-v7',outname, 'E');
     end
 end
+fprintf('Mean: %14.6f, %9.6f, %9.6f, %9.6f \n', mean(PRI_all), mean(VoI_all), mean(GCE_all), mean(BDE_all));
 
 
 

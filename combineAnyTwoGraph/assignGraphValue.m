@@ -21,7 +21,10 @@ for i=1:length(global_set)
           %[intersect_value,i_global, i_local]=intersect(global_neighbors,local_neighbors);
          % remove all  new_row(i_remove)=[];
           %new_col=nonzero_col(index_col);%repmat(local_nodes(i),length(index_col),1);
-   W(new_row,new_col)=W_give(new_row,new_col);
+   try       
+    W(new_row,new_col)=W_give(new_row,new_col);
+   catch 
+   end
         
 end
 end
